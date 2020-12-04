@@ -3,20 +3,14 @@ const express = require('express')
 const admin = require('firebase-admin');
 const app = express()
 
+
+
 const functions = require('firebase-functions')
-
 const cors = require('cors')
-
 admin.initializeApp()
 
 const db = admin.firestore();
-// // Create and Deploy Your First Cloud Functions-
-// // https://firebase.google.com/docs/functions/write-firebase-functions
 
-exports.helloWorld = functions.https.onRequest((request, response) => {
-  functions.logger.info("Hello logs!", {structuredData: true});
-  response.send("Hello from Firebase!");
-});
 
 app.use(cors({ origin: true }))
 
@@ -26,6 +20,8 @@ app.get('/', (req, res) => {
   })
 })
 
+
+//sold and unsold tugas; yes
 app.get('/allnotsold', async (req, res) => {
   try {
     
@@ -48,10 +44,9 @@ app.get('/allnotsold', async (req, res) => {
   }
 })
 
-
+//all of sold and unsold; yes
 app.get('/all', async (req, res) => {
   try {
-  
     
     const snapshot = await db.collection("docs").get()
 
@@ -74,44 +69,51 @@ app.get('/all', async (req, res) => {
 
 //pencari
 
-//kepunyaan 
-app.get('/currentlybuy/:uid', async (req, res) => {
+//kepunyaan ; yes
+app.get('/currentlybuy/:uid', async  (req, res) => {
   try {
     const uid = req.params.uid
-    if (body == undefined) {
+
+    console.log(uid);
+    if (uid == undefined) {
       createHttpError(400, 'The body doesnt exist')
     }
     
-    const snapshot = await db.collection("docs").where('pencari', 'array-contains', uid)
+    db.collection("docs").where('pencari', 'array-contains', uid)
+      .get()
+      .then(function (querySnapshot) {
+          let docres = []
+          querySnapshot.forEach(function(doc) {
+              // doc.data() is never undefined for query doc snapshots
+            console.log(doc.id, " => ", doc.data());
+            const data = doc.data()
+            data.id = doc.id
+            docres.push(data)
+          });
+        
+        console.log(`this is docsres: ${docres}`);
+        res.json({
+          uid: uid,
+          data: docres
+        })
 
-    const results  = []
-    snapshot.forEach(doc => {
-      console.log(doc.id);
-      results.push({
-        id: doc.id,
-        data: doc.data()
       })
-    })
-  
-
-    res.send({
-      data: results
-    }) 
+      .catch(function(error) {
+          console.log("Error getting documents: ", error);
+      });
   } catch (error) {
     console.error(error);
   }
 })
 
 //search by keyword
-app.post('/search/:keyword', async (req, res) => {
+app.get('/search/:tag', async (req, res) => {
   try {
-    const keyword = req.params.keyword
+    const tag = req.params.tag
+  
+    const snapshot = await db.collection("docs").where('tags', "array-contains", tag)
     
-
-    const snapshot = await db.collection("docs").where('tags', "array-contains", keyword)
-
-
-    const results  = []
+    let results = []
     snapshot.forEach(doc => {
       console.log(doc.id);
       results.push({
@@ -120,10 +122,6 @@ app.post('/search/:keyword', async (req, res) => {
       })
     })
 
-    res.send({
-      
-      data: results
-    }) 
   } catch (error) {
     console.error(error);
   }
@@ -132,42 +130,29 @@ app.post('/search/:keyword', async (req, res) => {
 //buy the docs
 app.post('/buy', async (req, res) => {
   try {
-    const { docid, uid } = req.body
-    
-    if (body == undefined) {
-      createHttpError(400, 'The body doesnt exist')
-    }
-    
-    const snapshot = await db.collection("docs")
-      .doc(docid)
-      .update(
-        {
-          sold: true,
-          pencari: admin.firestore.FieldValue.arrayUnion(`${uid}`)
-        })
-    
-    const results  = []
-    snapshot.forEach(doc => {
-      console.log(doc.id);
-      results.push({
-        id: doc.id,
-        data: doc.data()
-      })
-    })
 
-    res.send({
-      data: results
-    }) 
+    const did = req.body.did
+    const uid = req.body.uid
+    
+    const docref = db.collection('docs').doc();
+
+    const unionRes = await docref.update({
+      sold: true, 
+      pencari: admin.firestore.FieldValue.arrayUnion(uid)
+    });
+    
+    res.json(unionRes)
 
   } catch (error) {
-    console.error(error);
+    res.json(error)
   }
+
 })
 
 
-//PEMBAGI
+//PEMBAGI REST API
 
-//submit new docs
+//submit new docs; yes 
 app.post('/submit', async (req, res) => {
   try {
     const body = req.body
@@ -182,60 +167,82 @@ app.post('/submit', async (req, res) => {
     }
 
     console.log(mapinput);
-    
     const result = await db.collection("docs").add(mapinput)
 
-    res.send({
+    res.json({
       data: result
     }) 
+
   } catch (error) {
     console.error(error);
   }
 })
 
-//update everything 
-app.post('/update/:id',  async (req, res) => {
+//update  docs everything ; done
+app.post('/update/:did',  async (req, res) => {
   try {
+    const did = req.params.did
     const body = req.body
-    const mapinput = {}
+    const mapupdate = {}
     if (body == undefined) {
       createHttpError(400, 'The body doesnt exist')
     }
 
     for (let key in body) {
-      mapinput[key] = body[key]
-      // console.log(key, body[key]);
+      mapupdate[key] = body[key]
     }
-    
-    const result = await db.collection("docs").add(mapinput)
 
-    res.send({
-      
+    console.log(mapupdate);
+    
+    const result = await db.collection("docs")
+      .doc(did)
+      .update(mapupdate)
+
+    res.json({
       data: result
     }) 
   } catch (error) {
-    console.error(error);
+    res.json(error)
   }
 })
 
-//currently sell by the userid
-app.post('/currentlysell/:uid', async (req, res) => {
+//pembagi currently sell; yes
+app.get('/currentlysell/:uid', async  (req, res) => {
   try {
-    const { uid } = req.params
-  
+    const uid = req.params.uid
+
+    console.log(uid);
     if (uid == undefined) {
       createHttpError(400, 'The body doesnt exist')
     }
+    
+    db.collection("docs").where('pembagi', '==', uid)
+      .get()
+      .then(function (querySnapshot) {
+          let docres = []
+          querySnapshot.forEach(function(doc) {
+              // doc.data() is never undefined for query doc snapshots
+            console.log(doc.id, " => ", doc.data());
+            const data = doc.data()
+            data.id = doc.id
+            docres.push(data)
+          });
+        
+          console.log(`this is docsres: ${docres}`);
+          res.json({
+            uid: uid,
+            data: docres
+          })
 
-    const result = await db.collection("docs").where('pembagi', 'array-contains', uid)
-
-    res.send({
-      data: result
-    }) 
+      })
+      .catch(function(error) {
+          console.log("Error getting documents: ", error);
+      });
   } catch (error) {
     console.error(error);
   }
 })
+
 
 
 // const PORT = 500s
@@ -245,6 +252,4 @@ app.post('/currentlysell/:uid', async (req, res) => {
 // });
 
 
-module.exports = {
-  app
-}
+exports.app = functions.https.onRequest(app);
